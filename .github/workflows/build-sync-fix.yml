@@ -1,0 +1,64 @@
+name: Build JournalTOiR Windows Portable
+
+on:
+  push:
+    branches:
+      - chatgpt-build-sync-fix
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout build branch
+        uses: actions/checkout@v4
+
+      - name: Apply non-blocking sync patch
+        shell: pwsh
+        run: |
+          git apply --check build/sync_fix.patch
+          git apply build/sync_fix.patch
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Validate Python sources
+        shell: pwsh
+        run: |
+          python -m compileall -q .
+          python -c "import services.sync_service; import gui.main_window; print('imports ok')"
+
+      - name: Build portable EXE
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name Journal_TOiR --icon resources/app_icon.ico --add-data "resources;resources" main.py
+
+      - name: Verify EXE
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dist\Journal_TOiR.exe")) { throw "Journal_TOiR.exe was not created" }
+          Get-Item "dist\Journal_TOiR.exe" | Format-List Name,Length,LastWriteTime
+          Get-FileHash "dist\Journal_TOiR.exe" -Algorithm SHA256
+
+      - name: Upload portable EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: JournalTOiR-Windows-Portable-SyncFix
+          path: dist/Journal_TOiR.exe
+          if-no-files-found: error
+          retention-days: 7
