@@ -1,0 +1,242 @@
+--- a/gui/pages/settings_page.py	2026-08-20 14:07:04.000000000 +0000
++++ b/gui/pages/settings_page.py	2026-09-04 14:16:00.979386900 +0000
+@@ -10,6 +10,18 @@
+         super().__init__()
+         self.create_ui()
+ 
++    @staticmethod
++    def _create_form_layout(group):
++        layout = QFormLayout(group)
++        layout.setContentsMargins(12, 22, 12, 12)
++        layout.setHorizontalSpacing(16)
++        layout.setVerticalSpacing(10)
++        layout.setRowWrapPolicy(QFormLayout.WrapLongRows)
++        layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
++        layout.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
++        layout.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
++        return layout
++
+     def create_ui(self):
+         root = QVBoxLayout(self); root.setContentsMargins(22, 20, 22, 20); root.setSpacing(14)
+         title = QLabel("Настройки"); title.setObjectName("pageTitle")
+@@ -38,7 +50,7 @@
+ 
+     def create_organization_group(self):
+         group = QGroupBox("Организация")
+-        layout = QFormLayout(group)
++        layout = self._create_form_layout(group)
+         self.organization_name = QLineEdit()
+         self.customer_name = QLineEdit(); self.customer_name.setReadOnly(True)
+         self.logo_path = QLineEdit(); self.logo_path.setReadOnly(True)
+@@ -51,7 +63,7 @@
+ 
+     def create_user_group(self):
+         group = QGroupBox("Учётная запись")
+-        layout = QFormLayout(group)
++        layout = self._create_form_layout(group)
+         self.user_full_name = QLineEdit(); self.user_position = QLineEdit(); self.user_email = QLineEdit(); self.user_phone = QLineEdit()
+         self.user_phone.setPlaceholderText("Необязательно")
+         layout.addRow("ФИО", self.user_full_name)
+@@ -62,7 +74,7 @@
+ 
+     def create_security_group(self):
+         group = QGroupBox("Безопасность")
+-        layout = QFormLayout(group)
++        layout = self._create_form_layout(group)
+         self.pin_enabled = QCheckBox("Запрашивать PIN при запуске")
+         self.new_pin = QLineEdit(); self.new_pin.setEchoMode(QLineEdit.Password); self.new_pin.setMaxLength(6); self.new_pin.setPlaceholderText("Оставьте пустым, чтобы не менять текущий PIN")
+         self.pin_confirm = QLineEdit(); self.pin_confirm.setEchoMode(QLineEdit.Password); self.pin_confirm.setMaxLength(6); self.pin_confirm.setPlaceholderText("Повтор нового PIN")
+@@ -75,7 +87,7 @@
+ 
+     def create_storage_group(self):
+         group = QGroupBox("Хранилище")
+-        layout = QFormLayout(group)
++        layout = self._create_form_layout(group)
+         self.server_root = QLineEdit(); self.local_root = QLineEdit(); self.backup_root = QLineEdit()
+         self.btn_server_root = QPushButton("Выбрать")
+         self.btn_local_root = QPushButton("Выбрать")
+@@ -89,10 +101,10 @@
+ 
+     def create_sync_group(self):
+         group = QGroupBox("Синхронизация")
+-        layout = QFormLayout(group)
++        layout = self._create_form_layout(group)
+         self.sync_enabled = QCheckBox("Автоматически поддерживать локальную и серверную базы актуальными")
+-        self.sync_status = QLabel("—"); self.sync_status.setObjectName("muted")
+-        self.last_sync = QLabel("—"); self.last_sync.setObjectName("muted")
++        self.sync_status = QLabel("—"); self.sync_status.setObjectName("muted"); self.sync_status.setWordWrap(True); self.sync_status.setMinimumWidth(0)
++        self.last_sync = QLabel("—"); self.last_sync.setObjectName("muted"); self.last_sync.setWordWrap(True); self.last_sync.setMinimumWidth(0)
+         self.btn_test_server = QPushButton("Проверить сервер")
+         self.btn_sync_now = QPushButton("Синхронизировать сейчас")
+         row = QHBoxLayout(); row.addWidget(self.btn_test_server); row.addWidget(self.btn_sync_now); row.addStretch()
+@@ -101,7 +113,7 @@
+ 
+     def create_backup_group(self):
+         group = QGroupBox("Резервное копирование")
+-        layout = QFormLayout(group)
++        layout = self._create_form_layout(group)
+         self.backup_count = QSpinBox(); self.backup_count.setRange(3, 365); self.backup_count.setValue(20)
+         self.btn_backup_now = QPushButton("Создать резервную копию сейчас")
+         self.btn_check_db = QPushButton("Проверить целостность БД")
+@@ -112,7 +124,7 @@
+ 
+     def create_email_group(self):
+         group = QGroupBox("Рассылка по eMail")
+-        layout = QFormLayout(group)
++        layout = self._create_form_layout(group)
+ 
+         self.email_report_combo = QComboBox()
+         for report in (
+@@ -149,7 +161,7 @@
+ 
+     def create_quick_actions_group(self):
+         group = QGroupBox("Быстрые действия")
+-        layout = QFormLayout(group)
++        layout = self._create_form_layout(group)
+ 
+         self.quick_action_choices = (
+             ("add_equipment", "Добавить технику"),
+@@ -182,13 +194,19 @@
+ 
+     def create_ui_group(self):
+         group = QGroupBox("Интерфейс")
+-        layout = QFormLayout(group)
++        layout = self._create_form_layout(group)
+         self.theme = QComboBox(); self.theme.addItem("Тёмная", "dark"); self.theme.addItem("Светлая", "light")
+         self.animations = QCheckBox("Плавные переходы и анимации")
+         self.compact = QCheckBox("Компактный режим")
+         layout.addRow("Тема", self.theme); layout.addRow(self.animations); layout.addRow(self.compact)
+         return group
+ 
++    def set_sync_controls_enabled(self, enabled: bool):
++        enabled = bool(enabled)
++        self.btn_test_server.setEnabled(enabled)
++        self.btn_sync_now.setEnabled(enabled)
++        self.btn_sync_now.setText("Синхронизировать сейчас" if enabled else "Синхронизация…")
++
+     def set_all_settings(self, cfg, customer, sync_status=None):
+         self.organization_name.setText(cfg.get("organization_name", ""))
+         self.customer_name.setText(customer or "")
+--- a/gui/main_window.py	2026-09-04 13:44:24.000000000 +0000
++++ b/gui/main_window.py	2026-09-04 14:15:49.072211821 +0000
+@@ -255,6 +255,7 @@
+         # Сетевая синхронизация никогда не выполняется в UI-потоке.
+         self._sync_worker_thread = None
+         self._sync_message_requested = False
++        self._sync_started_at = None
+         self._sync_bridge = _SyncSignalBridge(self)
+         self._sync_bridge.finished.connect(self._sync_finished)
+ 
+@@ -3416,6 +3417,7 @@
+             self.app_settings.save(cfg)
+         self.settings_page.logo_path.setText(self.customer_manager.get_organization_logo())
+         self.settings_page.set_all_settings(cfg, self.customer_name, self.sync_service.status())
++        self._refresh_sync_widgets()
+         if hasattr(self.home_page, "apply_quick_actions"):
+             self.home_page.apply_quick_actions(
+                 cfg.get("ui", {}).get("quick_actions", ["add_equipment", "add_work", "reports", "settings"])
+@@ -3482,6 +3484,19 @@
+         if folder:
+             edit.setText(folder)
+ 
++    def _refresh_sync_widgets(self, busy_text=None):
++        if not hasattr(self, "settings_page"):
++            return
++        busy = self._sync_worker_thread is not None and self._sync_worker_thread.is_alive()
++        self.settings_page.set_sync_controls_enabled(not busy)
++        if busy:
++            text = busy_text or "Идёт синхронизация…"
++            self.settings_page.sync_status.setText(text)
++            return
++        status = self.sync_service.status()
++        self.settings_page.sync_status.setText(status["label"])
++        self.settings_page.last_sync.setText(status.get("last_sync") or "Ещё не выполнялась")
++
+     def test_server_connection(self):
+         # Используем значения прямо из формы, не требуя предварительного сохранения.
+         original = self.app_settings.load()
+@@ -3492,6 +3507,9 @@
+             ok = self.sync_service.server_available()
+         finally:
+             self.app_settings.save(original)
++        self.sync_service.set_online_cache(ok)
++        self.update_statusbar()
++        self._refresh_sync_widgets()
+         QMessageBox.information(self, "Сервер", "Серверная папка доступна для чтения и записи." if ok else "Серверная папка недоступна.")
+ 
+     def sync_now(self, show_message=False, force=False):
+@@ -3499,6 +3517,7 @@
+         cfg = self.app_settings.load()
+         if not force and not cfg.get("sync", {}).get("dirty"):
+             self.update_statusbar()
++            self._refresh_sync_widgets()
+             return {
+                 "ok": True,
+                 "state": "synced",
+@@ -3507,6 +3526,7 @@
+ 
+         if self._sync_worker_thread is not None and self._sync_worker_thread.is_alive():
+             self._sync_message_requested = self._sync_message_requested or show_message
++            self._refresh_sync_widgets("Идёт синхронизация…")
+             return {"ok": True, "state": "busy"}
+ 
+         customer_name = self.customer_name
+@@ -3531,13 +3551,16 @@
+             name=f"JournalTOiR-Sync-{customer_name}",
+             daemon=True,
+         )
++        self._sync_started_at = datetime.now()
+         if hasattr(self, "status_sync"):
+-            self.status_sync.setText("↻ Синхронизация в фоне…")
++            self.status_sync.setText("↻ Идёт синхронизация…")
++        self._refresh_sync_widgets("Идёт синхронизация…")
+         self._sync_worker_thread.start()
+         return {"ok": True, "state": "started"}
+ 
+     def _sync_finished(self, result):
+         self._sync_worker_thread = None
++        self._sync_started_at = None
+ 
+         # Если за время фоновой операции пользователь сменил заказчика, не меняем
+         # подписи текущего заказчика результатом старой операции.
+@@ -3548,11 +3571,13 @@
+         if "online" in result:
+             self.sync_service.set_online_cache(result.get("online"))
+ 
++        if result.get("ok") and result.get("time"):
++            # Дублируем очистку dirty-флага в UI-потоке, чтобы статус страницы
++            # настроек сразу переключался на «Синхронизировано».
++            self.app_settings.clear_dirty(result.get("time"), result.get("time"))
++
+         self.update_statusbar()
+-        if hasattr(self.settings_page, "sync_status"):
+-            status = self.sync_service.status()
+-            self.settings_page.sync_status.setText(status["label"])
+-            self.settings_page.last_sync.setText(status.get("last_sync") or "Ещё не выполнялась")
++        self._refresh_sync_widgets()
+ 
+         if self._sync_message_requested:
+             self._sync_message_requested = False
+@@ -3575,6 +3600,7 @@
+         except Exception:
+             # Ошибка фоновой синхронизации не должна мешать локальной работе.
+             self.update_statusbar()
++            self._refresh_sync_widgets()
+ 
+     def _manual_backup(self):
+         try:
+@@ -4420,9 +4446,12 @@
+             self.status_database.setText("Локальная БД: активна")
+         else:
+             self.status_database.setText("Локальная БД: ошибка")
+-        sync = self.sync_service.status()
+-        marker = "●" if sync["online"] is True else "○"
+-        self.status_sync.setText(f"{marker} {sync['label']}")
++        if self._sync_worker_thread is not None and self._sync_worker_thread.is_alive():
++            self.status_sync.setText("↻ Идёт синхронизация…")
++        else:
++            sync = self.sync_service.status()
++            marker = "●" if sync["online"] is True else "○"
++            self.status_sync.setText(f"{marker} {sync['label']}")
+         user = self.app_settings.load().get("user", {})
+         self.status_user.setText(user.get("full_name") or "Пользователь не указан")
