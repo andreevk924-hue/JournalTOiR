@@ -24,17 +24,16 @@ jobs:
           git apply --check build/sync_fix.patch
           git apply build/sync_fix.patch
 
-      - name: Apply sync UI patch
-        shell: pwsh
-        run: |
-          git apply --check build/sync_ui_v2.patch
-          git apply build/sync_ui_v2.patch
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
           cache: 'pip'
+
+      - name: Apply synchronization UI fixes
+        shell: pwsh
+        run: |
+          python build/apply_sync_ui_v2.py
 
       - name: Install dependencies
         shell: pwsh
