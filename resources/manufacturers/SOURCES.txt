@@ -1,0 +1,13 @@
+Встроенные логотипы производителей используются только как справочные торговые знаки.
+
+Существующие: Komatsu, Caterpillar, Hitachi Construction Machinery, Liebherr, BELAZ.
+Добавлены в этом патче:
+- XCMG — Wikimedia Commons, File:XCMG logo.svg (author/source attribution on file page).
+- SANY — Wikimedia Commons, File:SANY Group logo.svg; source on Commons points to sanygroup.com.
+- LiuGong — Wikimedia Commons, File:LiuGong logo.svg; source on Commons points to LiuGong corporate brochure.
+- ЧЕТРА — зарегистрированный товарный знак, визуальный файл из карточки товарного знака РБК/OnlinePatent.
+- UMG — фирменный знак вырезан из официальной фотографии на umg-sdm.com.
+- ДСТ-УРАЛ — Wikimedia Commons, File:Dst-ural logo.png; source tm10.ru.
+
+Торговые марки принадлежат соответствующим правообладателям.
+Dark-варианты используются только для читаемости логотипов в тёмной теме и формируются из тех же исходных знаков.
