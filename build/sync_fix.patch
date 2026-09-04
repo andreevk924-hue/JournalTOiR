@@ -1,0 +1,338 @@
+--- a/services/sync_service.py
++++ b/services/sync_service.py
+@@ -13,6 +13,9 @@
+         self.customer_name = str(customer_name or "").strip()
+         self.repository = repository
+         self.settings = AppSettingsManager()
++        # Кэш состояния сервера. В status() сетевых операций больше нет:
++        # проверка сетевой папки выполняется только во время фоновой синхронизации.
++        self._online_cache = None
+ 
+     @staticmethod
+     def _stamp():
+@@ -35,16 +38,24 @@
+     def server_available(self):
+         path = self.server_db_path()
+         if path is None:
++            self._online_cache = False
+             return False
+         try:
+             path.parent.mkdir(parents=True, exist_ok=True)
+             probe = path.parent / ".journaltoir_probe"
+             probe.write_text("ok", encoding="utf-8")
+             probe.unlink(missing_ok=True)
++            self._online_cache = True
+             return True
+         except OSError:
++            self._online_cache = False
+             return False
+ 
++    def set_online_cache(self, value):
++        if value is None:
++            return
++        self._online_cache = bool(value)
++
+     def prepare_before_open(self):
+         """До открытия SQLite выбираем наиболее свежую целую копию."""
+         config = self.config()
+@@ -73,61 +84,105 @@
+     def sync_now(self, force=False):
+         config = self.config()
+         if not config["sync"].get("enabled", True):
+-            return {"ok": True, "state": "disabled"}
++            return {"ok": True, "state": "disabled", "online": None}
++
++        # Если локальных изменений нет, автоматическая синхронизация не должна
++        # вообще обращаться к сети. Это особенно важно для медленных SMB/VPN-папок.
++        dirty = bool(config["sync"].get("dirty"))
++        if not dirty and not force:
++            return {
++                "ok": True,
++                "state": "synced",
++                "time": config["sync"].get("last_sync", ""),
++                "online": self._online_cache,
++            }
++
+         server = self.server_db_path()
+         if server is None:
+-            return {"ok": False, "state": "not_configured", "error": "Серверная папка не настроена"}
++            self._online_cache = False
++            return {
++                "ok": False,
++                "state": "not_configured",
++                "error": "Серверная папка не настроена",
++                "online": False,
++            }
+         if not self.server_available():
+             self.settings.set_sync_error("Сервер недоступен")
+-            return {"ok": False, "state": "offline", "error": "Сервер недоступен"}
++            return {
++                "ok": False,
++                "state": "offline",
++                "error": "Сервер недоступен",
++                "online": False,
++            }
++
+         local = self.local_db_path()
+         if not local.exists():
+-            return {"ok": False, "state": "no_local", "error": "Локальная база не найдена"}
+-        dirty = bool(config["sync"].get("dirty"))
+-        if not dirty and not force and server.exists():
+-            return {"ok": True, "state": "synced", "time": config["sync"].get("last_sync", "")}
++            return {
++                "ok": False,
++                "state": "no_local",
++                "error": "Локальная база не найдена",
++                "online": True,
++            }
++
+         server.parent.mkdir(parents=True, exist_ok=True)
+         try:
+-            if self.repository is not None and getattr(self.repository, "connection", None) is not None:
+-                destination = sqlite3.connect(server)
+-                try:
+-                    self.repository.connection.backup(destination)
+-                    destination.commit()
+-                finally:
+-                    destination.close()
+-            else:
+-                source = sqlite3.connect(local)
+-                destination = sqlite3.connect(server)
+-                try:
+-                    source.backup(destination)
+-                    destination.commit()
+-                finally:
+-                    source.close(); destination.close()
++            # Всегда открываем отдельное SQLite-соединение. Благодаря этому метод
++            # безопасно запускается из фонового потока и не использует соединение UI.
++            source = sqlite3.connect(local, timeout=10)
++            destination = sqlite3.connect(server, timeout=10)
++            try:
++                source.backup(destination, pages=256, sleep=0.01)
++                destination.commit()
++            finally:
++                source.close()
++                destination.close()
++
+             now = self._stamp()
+             self.settings.clear_dirty(now, now)
+-            return {"ok": True, "state": "synced", "time": now}
++            self._online_cache = True
++            return {"ok": True, "state": "synced", "time": now, "online": True}
+         except Exception as exc:
+             self.settings.set_sync_error(exc)
+-            return {"ok": False, "state": "error", "error": str(exc)}
++            return {
++                "ok": False,
++                "state": "error",
++                "error": str(exc),
++                "online": self._online_cache,
++            }
+ 
+     def status(self):
+         config = self.config()
+         enabled = config["sync"].get("enabled", True)
+         dirty = bool(config["sync"].get("dirty"))
+-        online = self.server_available() if enabled else False
++        last_sync = config["sync"].get("last_sync", "")
++        last_error = config["sync"].get("last_error", "")
++
++        # ВАЖНО: status() вызывается из UI и поэтому не делает сетевых запросов.
++        # Используем результат последней фоновой проверки/синхронизации.
++        online = self._online_cache
++        if online is None:
++            if last_error:
++                online = False
++            elif last_sync:
++                online = True
++
+         if not enabled:
+             label = "Синхронизация выключена"
+-        elif not online:
+-            label = "Работа локально · сервер недоступен"
++        elif dirty and online is False:
++            label = "Есть изменения · сервер недоступен"
+         elif dirty:
+             label = "Есть изменения · ожидает синхронизации"
+-        else:
++        elif online is False:
++            label = "Работа локально · сервер недоступен"
++        elif online is True:
+             label = "Синхронизировано"
++        else:
++            label = "Сервер ещё не проверен"
+         return {
+             "enabled": enabled,
+             "online": online,
+             "dirty": dirty,
+             "label": label,
+-            "last_sync": config["sync"].get("last_sync", ""),
+-            "last_error": config["sync"].get("last_error", ""),
++            "last_sync": last_sync,
++            "last_error": last_error,
+         }
+--- a/gui/main_window.py
++++ b/gui/main_window.py
+@@ -4,10 +4,11 @@
+ from pathlib import Path
+ from datetime import datetime
+ import sys
++import threading
+ 
+ from PySide6.QtCore import (
+     QDate, QTimer, Qt, QMarginsF, QSettings, QPropertyAnimation,
+-    QEasingCurve, QUrl, QParallelAnimationGroup, QSize
++    QEasingCurve, QUrl, QParallelAnimationGroup, QSize, QObject, Signal
+ )
+ from PySide6.QtGui import QAction, QBrush, QColor, QPixmap, QTextDocument, QPageSize, QPageLayout, QFont, QDesktopServices
+ from PySide6.QtPrintSupport import QPrinter, QPrintDialog
+@@ -75,6 +76,11 @@
+ APP_VERSION = "1.0.0"
+ 
+ 
++class _SyncSignalBridge(QObject):
++    """Передаёт результат Python-потока обратно в Qt UI-поток."""
++    finished = Signal(object)
++
++
+ class FramelessTitleBar(QWidget):
+     """Компактная frameless-панель без текста.
+ 
+@@ -246,6 +252,12 @@
+         self.outlook_service = OutlookService()
+         self._report_export = None
+ 
++        # Сетевая синхронизация никогда не выполняется в UI-потоке.
++        self._sync_worker_thread = None
++        self._sync_message_requested = False
++        self._sync_bridge = _SyncSignalBridge(self)
++        self._sync_bridge.finished.connect(self._sync_finished)
++
+         self.setWindowTitle(
+             "Журнал ТОиР"
+         )
+@@ -283,7 +295,9 @@
+ 
+         self.sync_timer = QTimer(self)
+         self.sync_timer.timeout.connect(self._background_sync)
+-        self.sync_timer.start(3_000)
++        # Проверяем наличие локальных изменений раз в 5 секунд. Если изменений нет,
++        # к серверу вообще не обращаемся; если есть — копирование идёт в фоне.
++        self.sync_timer.start(5_000)
+ 
+         self._shown_system_notification_keys = set()
+         self.tray_icon = QSystemTrayIcon(create_app_icon(), self)
+@@ -3481,23 +3495,85 @@
+         QMessageBox.information(self, "Сервер", "Серверная папка доступна для чтения и записи." if ok else "Серверная папка недоступна.")
+ 
+     def sync_now(self, show_message=False, force=False):
+-        result = self.sync_service.sync_now(force=force)
++        # Быстрый no-op без создания потока и без обращения к сети.
++        cfg = self.app_settings.load()
++        if not force and not cfg.get("sync", {}).get("dirty"):
++            self.update_statusbar()
++            return {
++                "ok": True,
++                "state": "synced",
++                "time": cfg.get("sync", {}).get("last_sync", ""),
++            }
++
++        if self._sync_worker_thread is not None and self._sync_worker_thread.is_alive():
++            self._sync_message_requested = self._sync_message_requested or show_message
++            return {"ok": True, "state": "busy"}
++
++        customer_name = self.customer_name
++        self._sync_message_requested = self._sync_message_requested or show_message
++
++        def worker():
++            try:
++                # Отдельный SyncService не получает repository: он открывает своё
++                # SQLite-соединение и не трогает соединение главного UI-потока.
++                result = SyncService(customer_name).sync_now(force=force)
++            except Exception as exc:
++                result = {"ok": False, "state": "error", "error": str(exc)}
++            result["customer_name"] = customer_name
++            try:
++                self._sync_bridge.finished.emit(result)
++            except RuntimeError:
++                # Окно уже закрыто — локальная БД всё равно остаётся актуальной.
++                pass
++
++        self._sync_worker_thread = threading.Thread(
++            target=worker,
++            name=f"JournalTOiR-Sync-{customer_name}",
++            daemon=True,
++        )
++        if hasattr(self, "status_sync"):
++            self.status_sync.setText("↻ Синхронизация в фоне…")
++        self._sync_worker_thread.start()
++        return {"ok": True, "state": "started"}
++
++    def _sync_finished(self, result):
++        self._sync_worker_thread = None
++
++        # Если за время фоновой операции пользователь сменил заказчика, не меняем
++        # подписи текущего заказчика результатом старой операции.
++        if result.get("customer_name") != self.customer_name:
++            self._sync_message_requested = False
++            return
++
++        if "online" in result:
++            self.sync_service.set_online_cache(result.get("online"))
++
+         self.update_statusbar()
+         if hasattr(self.settings_page, "sync_status"):
+             status = self.sync_service.status()
+             self.settings_page.sync_status.setText(status["label"])
+             self.settings_page.last_sync.setText(status.get("last_sync") or "Ещё не выполнялась")
+-        if show_message:
++
++        if self._sync_message_requested:
++            self._sync_message_requested = False
+             if result.get("ok"):
+-                QMessageBox.information(self, "Синхронизация", "Локальная и серверная базы синхронизированы.")
++                QMessageBox.information(
++                    self,
++                    "Синхронизация",
++                    "Локальная и серверная базы синхронизированы.",
++                )
+             else:
+-                QMessageBox.warning(self, "Синхронизация", result.get("error") or "Синхронизация не выполнена.")
+-        return result
++                QMessageBox.warning(
++                    self,
++                    "Синхронизация",
++                    result.get("error") or "Синхронизация не выполнена.",
++                )
+ 
+     def _background_sync(self):
+         try:
+             self.sync_now(show_message=False)
+         except Exception:
++            # Ошибка фоновой синхронизации не должна мешать локальной работе.
+             self.update_statusbar()
+ 
+     def _manual_backup(self):
+@@ -4345,7 +4421,7 @@
+         else:
+             self.status_database.setText("Локальная БД: ошибка")
+         sync = self.sync_service.status()
+-        marker = "●" if sync["online"] else "○"
++        marker = "●" if sync["online"] is True else "○"
+         self.status_sync.setText(f"{marker} {sync['label']}")
+         user = self.app_settings.load().get("user", {})
+         self.status_user.setText(user.get("full_name") or "Пользователь не указан")
+@@ -4455,10 +4531,9 @@
+         event,
+     ):
+         self._save_ui_state()
+-        try:
+-            self.sync_now(show_message=False, force=True)
+-        except Exception:
+-            pass
++        # Не блокируем закрытие сетевой синхронизацией. Если последние изменения
++        # ещё не успели уйти на сервер, dirty-флаг сохранится и они будут
++        # отправлены при следующем запуске/фоновой синхронизации.
+         try:
+             self.create_backup()
+ 
