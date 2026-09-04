@@ -24,6 +24,12 @@ jobs:
           git apply --check build/sync_fix.patch
           git apply build/sync_fix.patch
 
+      - name: Apply sync UI patch
+        shell: pwsh
+        run: |
+          git apply --check build/sync_ui_v2.patch
+          git apply build/sync_ui_v2.patch
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -41,7 +47,7 @@ jobs:
         shell: pwsh
         run: |
           python -m compileall -q .
-          python -c "import services.sync_service; import gui.main_window; print('imports ok')"
+          python -c "import services.sync_service; import gui.main_window; import gui.pages.settings_page; print('imports ok')"
 
       - name: Build portable EXE
         shell: pwsh
@@ -58,7 +64,7 @@ jobs:
       - name: Upload portable EXE
         uses: actions/upload-artifact@v4
         with:
-          name: JournalTOiR-Windows-Portable-SyncFix
+          name: JournalTOiR-Windows-Portable-SyncFix-v2
           path: dist/Journal_TOiR.exe
           if-no-files-found: error
           retention-days: 7
