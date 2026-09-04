@@ -1,0 +1,31 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Runtime / working data
+data/
+backups/
+logs/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Build artifacts
+.buildvenv/
+build/
+dist/
+release/
+
+# IDE
+.vscode/
+.idea/
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
