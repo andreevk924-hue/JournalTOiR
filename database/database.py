@@ -2,10 +2,23 @@
 
 import re
 import sqlite3
+import sys
 from pathlib import Path
 
 
-APP_ROOT = Path(__file__).resolve().parent.parent
+def _application_root() -> Path:
+    """Папка для рабочих данных.
+
+    В исходниках это корень проекта. В собранной portable EXE — папка,
+    в которой лежит Journal_TOiR.exe. Ресурсы PyInstaller при этом остаются
+    внутри EXE и распаковываются во временную служебную папку автоматически.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
+APP_ROOT = _application_root()
 
 DATA_DIR = APP_ROOT / "data"
 CUSTOMERS_DIR = DATA_DIR / "customers"
