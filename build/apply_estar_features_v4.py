@@ -638,9 +638,10 @@ s = replace_once(
 ''',
     '''        side.addWidget(description_box, 2)
 
+        side.addWidget(self.is_warranty, 0)
+
         self.warranty_box = QGroupBox("Гарантийная работа / АР")
         warranty_layout = QFormLayout(self.warranty_box)
-        warranty_layout.addRow("", self.is_warranty)
         warranty_layout.addRow("", self.claim_registered)
         warranty_layout.addRow("Дата АР", self.warranty_claim_date)
         warranty_layout.addRow("Ответ на АР", self.warranty_claim_response)
