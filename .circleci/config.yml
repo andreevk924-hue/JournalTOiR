@@ -102,4 +102,4 @@ workflows:
           filters:
             branches:
               only:
-                - circleci-release-ready
+                - chatgpt-build-sync-fix
