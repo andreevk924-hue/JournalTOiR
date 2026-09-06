@@ -1,6 +1,6 @@
 ; JournalTOiR installer
 #define MyAppName "Журнал ТОиР"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "Андреев Константин Романович"
 #define MyAppExeName "Journal_TOiR.exe"
 
@@ -14,7 +14,7 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=output
-OutputBaseFilename=JournalTOiR_Setup_1.0.0
+OutputBaseFilename=JournalTOiR_Setup_1.1.0
 SetupIconFile=..\resources\app_icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64
