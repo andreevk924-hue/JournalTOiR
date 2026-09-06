@@ -1,0 +1,51 @@
+name: Validate ESTAR Features
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - chatgpt-build-sync-fix
+    paths:
+      - ".github/workflows/validate-estar.yml"
+      - "build/apply_estar_features_v4.py"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply base sync patch
+        run: |
+          git apply --check build/sync_fix.patch
+          git apply build/sync_fix.patch
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Apply patches
+        run: |
+          python build/apply_sync_ui_v2.py
+          python build/apply_estar_features_v4.py
+      - name: Validate syntax and migrations
+        run: |
+          python -m compileall -q .
+          python - <<'PY'
+          import sqlite3, tempfile
+          from pathlib import Path
+          from database.migrations import migrate
+          p = Path(tempfile.gettempdir()) / "journaltoir_estar_validation.db"
+          p.unlink(missing_ok=True)
+          migrate(db_path=p)
+          con = sqlite3.connect(p)
+          eq = {r[1] for r in con.execute("pragma table_info(equipment)")}
+          wr = {r[1] for r in con.execute("pragma table_info(work_records)")}
+          assert {"meter_hours","supply_contract_number"} <= eq
+          assert {"is_warranty","warranty_claim_date","warranty_claim_response"} <= wr
+          assert con.execute("select 1 from sqlite_master where type='table' and name='equipment_hour_resets'").fetchone()
+          con.close()
+          p.unlink(missing_ok=True)
+          print("ESTAR validation OK")
+          PY
