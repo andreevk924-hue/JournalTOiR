@@ -997,7 +997,7 @@ needle = '''            distributor_id=data.get("distributor_id"),
         self.refresh_all()
 
         self.status.showMessage(
-            "Техника обновлена.",
+            "Данные техники обновлены.",
 '''
 if needle not in s:
     raise RuntimeError("Не найден блок edit equipment extended")
