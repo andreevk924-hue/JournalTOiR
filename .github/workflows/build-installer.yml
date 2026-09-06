@@ -7,6 +7,7 @@ on:
     paths:
       - "installer/**"
       - ".github/workflows/build-installer.yml"
+      - "build/apply_estar_features_v4.py"
   workflow_dispatch:
 
 permissions:
@@ -37,6 +38,7 @@ jobs:
         shell: pwsh
         run: |
           python build/apply_sync_ui_v2.py
+          python build/apply_estar_features_v4.py
 
       - name: Install Python dependencies
         shell: pwsh
@@ -49,7 +51,8 @@ jobs:
         shell: pwsh
         run: |
           python -m compileall -q .
-          python -c "import services.sync_service; import gui.main_window; print('imports ok')"
+          python -c "import services.sync_service; import gui.main_window; import dialogs.equipment_dialog; import dialogs.edit_work_dialog; print('imports ok')"
+          python -c "import tempfile,sqlite3; from pathlib import Path; from database.migrations import migrate; p=Path(tempfile.gettempdir())/'journaltoir_v110_test.db'; p.unlink(missing_ok=True); migrate(db_path=p); c=sqlite3.connect(p); assert {r[1] for r in c.execute('pragma table_info(equipment)')} >= {'meter_hours','supply_contract_number'}; assert {r[1] for r in c.execute('pragma table_info(work_records)')} >= {'is_warranty','warranty_claim_date','warranty_claim_response'}; assert c.execute(\"select name from sqlite_master where type='table' and name='equipment_hour_resets'\").fetchone(); c.close(); p.unlink(missing_ok=True); print('ESTAR migration ok')"
 
       - name: Build installed application folder
         shell: pwsh
@@ -82,7 +85,7 @@ jobs:
         shell: pwsh
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\JournalTOiR.iss"
-          if (!(Test-Path "installer\output\JournalTOiR_Setup_1.0.0.exe")) { throw "Installer build failed" }
+          if (!(Test-Path "installer\output\JournalTOiR_Setup_1.1.0.exe")) { throw "Installer build failed" }
 
       - name: Optional Authenticode sign installer
         shell: pwsh
@@ -99,19 +102,19 @@ jobs:
             [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CODE_SIGN_PFX_BASE64))
           }
           $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1).FullName
-          & $signtool sign /fd SHA256 /f $pfx /p $env:CODE_SIGN_PASSWORD /tr http://timestamp.digicert.com /td SHA256 "installer\output\JournalTOiR_Setup_1.0.0.exe"
-          & $signtool verify /pa /v "installer\output\JournalTOiR_Setup_1.0.0.exe"
+          & $signtool sign /fd SHA256 /f $pfx /p $env:CODE_SIGN_PASSWORD /tr http://timestamp.digicert.com /td SHA256 "installer\output\JournalTOiR_Setup_1.1.0.exe"
+          & $signtool verify /pa /v "installer\output\JournalTOiR_Setup_1.1.0.exe"
 
       - name: Hash installer
         shell: pwsh
         run: |
-          Get-Item "installer\output\JournalTOiR_Setup_1.0.0.exe" | Format-List Name,Length,LastWriteTime
-          Get-FileHash "installer\output\JournalTOiR_Setup_1.0.0.exe" -Algorithm SHA256
+          Get-Item "installer\output\JournalTOiR_Setup_1.1.0.exe" | Format-List Name,Length,LastWriteTime
+          Get-FileHash "installer\output\JournalTOiR_Setup_1.1.0.exe" -Algorithm SHA256
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: JournalTOiR-Installer-1.0.0
-          path: installer/output/JournalTOiR_Setup_1.0.0.exe
+          name: JournalTOiR-Installer-1.1.0
+          path: installer/output/JournalTOiR_Setup_1.1.0.exe
           if-no-files-found: error
           retention-days: 7
