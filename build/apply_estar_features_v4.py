@@ -272,6 +272,48 @@ append = r'''
 s = s.rstrip() + "\n" + append + "\n"
 p.write_text(s, encoding="utf-8")
 
+# Дневная наработка хранится как ОБЩАЯ наработка. Для машин со
+# сбросами счётчика одновременно обновляем физическое показание.
+s = replace_once(
+    s,
+    '''        if (
+            equipment is not None
+            and entered_hours > current_equipment_hours
+        ):
+            self._execute(
+                """
+                UPDATE equipment
+                SET current_hours = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (entered_hours, now, work["equipment_id"]),
+            )
+''',
+    '''        if (
+            equipment is not None
+            and entered_hours > current_equipment_hours
+        ):
+            offset = self.get_hour_reset_offset(work["equipment_id"])
+            meter_hours = max(0.0, entered_hours - offset)
+            self._execute(
+                """
+                UPDATE equipment
+                SET current_hours = ?,
+                    meter_hours = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    entered_hours,
+                    meter_hours,
+                    now,
+                    work["equipment_id"],
+                ),
+            )
+''',
+    "daily total hours with meter reset",
+)
+
 # ============================================================
 # EQUIPMENT DIALOG
 # ============================================================
@@ -789,9 +831,9 @@ s = replace_once(
     '''        if "модерн" in normalized or "сборк" in normalized or "гарант" in normalized:
             return "Модернизация"
 ''',
-    '''        if "гарант" in normalized:
+    '''        if normalized in ("гарантийная работа", "гарантийный ремонт"):
             return "Гарантийная работа"
-        if "модерн" in normalized or "сборк" in normalized:
+        if "модерн" in normalized or "сборк" in normalized or "гарант" in normalized:
             return "Модернизация"
 ''',
     "schedule normalize warranty",
@@ -990,34 +1032,28 @@ s = replace_once(
     "main equipment set extended",
 )
 
-# After update_equipment (unique occurrence later) add extended update.
-needle = '''            distributor_id=data.get("distributor_id"),
-        )
-
-        self.refresh_all()
-
-        self.status.showMessage(
-            "Данные техники обновлены.",
-'''
-if needle not in s:
-    raise RuntimeError("Не найден блок edit equipment extended")
-s = s.replace(
-    needle,
-    '''            distributor_id=data.get("distributor_id"),
-        )
+# После update_equipment добавляем расширенные поля. Ищем сам вызов,
+# а не текст следующего сообщения UI — так патч не ломается от переименования.
+edit_call = s.find("        self.repository.update_equipment(\n")
+if edit_call < 0:
+    raise RuntimeError("Не найден вызов update_equipment для расширенных полей")
+edit_call_end = s.find("\n        )", edit_call)
+if edit_call_end < 0:
+    raise RuntimeError("Не найден конец вызова update_equipment")
+edit_insert_at = edit_call_end + len("\n        )")
+edit_probe = s[edit_insert_at:edit_insert_at + 900]
+if "self.repository.set_equipment_extended_fields(" not in edit_probe:
+    s = (
+        s[:edit_insert_at]
+        + '''
         self.repository.set_equipment_extended_fields(
             equipment_id,
             meter_hours=data.get("meter_hours", data.get("current_hours", 0)),
             supply_contract_number=data.get("supply_contract_number", ""),
         )
-
-        self.refresh_all()
-
-        self.status.showMessage(
-            "Техника обновлена.",
-''',
-    1,
-)
+'''
+        + s[edit_insert_at:]
+    )
 
 # Add work warranty details right after add_work.
 s = replace_once(
@@ -1071,7 +1107,13 @@ s = replace_once(
     "main edit work load warranty",
 )
 
-# After update_work, persist warranty. Anchor by second machine_hours block.
+# После update_work сохраняем гарантийные поля. Поиск ограничен методом
+# edit_work, чтобы добавление других расчётов machine_hours не ломало патчер.
+edit_work_pos = s.find("    def edit_work(self):\n")
+if edit_work_pos < 0:
+    raise RuntimeError("Не найден метод edit_work")
+next_method_pos = s.find("\n    def ", edit_work_pos + 20)
+edit_work_end = next_method_pos if next_method_pos >= 0 else len(s)
 update_anchor = '''        machine_hours = float(
             data.get(
                 "machine_hours",
@@ -1082,18 +1124,20 @@ update_anchor = '''        machine_hours = float(
 
         if machine_hours > 0:
 '''
-first = s.find(update_anchor)
-second = s.find(update_anchor, first + 1) if first >= 0 else -1
-if second < 0:
-    raise RuntimeError("Не найден второй блок machine_hours для edit_work")
-s = s[:second] + '''        self.repository.set_work_warranty_details(
+anchor_pos = s.find(update_anchor, edit_work_pos, edit_work_end)
+if anchor_pos < 0:
+    raise RuntimeError("Не найден блок machine_hours внутри edit_work")
+if "self.repository.set_work_warranty_details(" not in s[
+    max(edit_work_pos, anchor_pos - 700):anchor_pos
+]:
+    s = s[:anchor_pos] + '''        self.repository.set_work_warranty_details(
             work_id,
             is_warranty=data.get("is_warranty", False),
             warranty_claim_date=data.get("warranty_claim_date", ""),
             warranty_claim_response=data.get("warranty_claim_response", ""),
         )
 
-''' + s[second:]
+''' + s[anchor_pos:]
 
 # When work hours update, preserve reset offset.
 s = replace_once(
