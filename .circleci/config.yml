@@ -1,0 +1,105 @@
+version: 2.1
+
+orbs:
+  win: circleci/windows@5.0
+
+jobs:
+  build-installer:
+    executor:
+      name: win/server-2022
+      size: medium
+
+    steps:
+      - checkout
+
+      - run:
+          name: Install Python 3.13
+          command: |
+            choco install python313 -y --no-progress
+            py -3.13 --version
+
+      - run:
+          name: Apply JournalTOiR patches
+          command: |
+            git apply --check build/sync_fix.patch
+            git apply build/sync_fix.patch
+            py -3.13 build/apply_sync_ui_v2.py
+            py -3.13 build/apply_estar_features_v4.py
+
+      - run:
+          name: Install dependencies
+          command: |
+            py -3.13 -m pip install --upgrade pip
+            py -3.13 -m pip install -r requirements.txt
+            py -3.13 -m pip install pyinstaller
+
+      - run:
+          name: Validate sources and database migration
+          command: |
+            py -3.13 -m compileall -q .
+            py -3.13 -c "import services.sync_service; import gui.main_window; import dialogs.equipment_dialog; import dialogs.edit_work_dialog; print('imports ok')"
+            @'
+            import sqlite3
+            import tempfile
+            from pathlib import Path
+            from database.migrations import migrate
+
+            p = Path(tempfile.gettempdir()) / "journaltoir_v110_circleci_test.db"
+            p.unlink(missing_ok=True)
+            migrate(db_path=p)
+
+            con = sqlite3.connect(p)
+            eq = {row[1] for row in con.execute("PRAGMA table_info(equipment)")}
+            wr = {row[1] for row in con.execute("PRAGMA table_info(work_records)")}
+
+            assert {"meter_hours", "supply_contract_number"} <= eq
+            assert {
+                "is_warranty",
+                "warranty_claim_date",
+                "warranty_claim_response",
+            } <= wr
+            assert con.execute(
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type='table' AND name='equipment_hour_resets'"
+            ).fetchone()
+
+            con.close()
+            p.unlink(missing_ok=True)
+            print("ESTAR database migration OK")
+            '@ | Set-Content -Encoding UTF8 circleci_validate.py
+            py -3.13 circleci_validate.py
+
+      - run:
+          name: Build Windows application
+          command: |
+            py -3.13 -m PyInstaller --noconfirm --clean --onedir --windowed --name Journal_TOiR --icon resources/app_icon.ico --add-data "resources;resources" main.py
+            if (!(Test-Path "dist\Journal_TOiR\Journal_TOiR.exe")) {
+              throw "Journal_TOiR.exe was not created"
+            }
+
+      - run:
+          name: Install Inno Setup
+          command: |
+            choco install innosetup -y --no-progress
+
+      - run:
+          name: Build JournalTOiR installer
+          command: |
+            & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\JournalTOiR.iss"
+            if (!(Test-Path "installer\output\JournalTOiR_Setup_1.1.0.exe")) {
+              throw "JournalTOiR_Setup_1.1.0.exe was not created"
+            }
+            Get-FileHash "installer\output\JournalTOiR_Setup_1.1.0.exe" -Algorithm SHA256
+
+      - store_artifacts:
+          path: installer/output/JournalTOiR_Setup_1.1.0.exe
+          destination: JournalTOiR_Setup_1.1.0.exe
+
+workflows:
+  build-journaltoir-installer:
+    jobs:
+      - build-installer:
+          filters:
+            branches:
+              only:
+                - chatgpt-build-sync-fix
