@@ -664,6 +664,13 @@ s = p.read_text(encoding="utf-8")
 
 s = replace_once(
     s,
+    'APP_VERSION = "1.0.0"',
+    'APP_VERSION = "1.1.0"',
+    "app version 1.1.0",
+)
+
+s = replace_once(
+    s,
     '''        if name == "КТГ":
             data = service.get_ktg(date_from, date_to)
             summary = [
