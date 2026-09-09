@@ -155,7 +155,13 @@ helper = '''    @staticmethod
             event.type() == QEvent.Type.Wheel
             and isinstance(obj, (QComboBox, QSpinBox))
         ):
-            event.ignore()
+            # Значение поля не меняем; то же колесо двигает страницу.
+            if hasattr(self, "settings_scroll"):
+                bar = self.settings_scroll.verticalScrollBar()
+                delta = event.angleDelta().y()
+                if delta:
+                    bar.setValue(bar.value() - delta)
+            event.accept()
             return True
         return super().eventFilter(obj, event)
 
@@ -1183,7 +1189,7 @@ new_details = '''            # ------------------------- DETAILS ---------------
                         )
 
                         executors = (
-                            "—"
+                            ""
                             if day_state == "Простой"
                             else (detail["executors"] or "—")
                         )
