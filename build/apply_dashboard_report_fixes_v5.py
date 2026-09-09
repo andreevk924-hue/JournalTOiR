@@ -662,6 +662,67 @@ p.write_text(s, encoding="utf-8")
 p = Path("gui/main_window.py")
 s = p.read_text(encoding="utf-8")
 
+s = replace_once(
+    s,
+    '''        if name == "КТГ":
+            data = service.get_ktg(date_from, date_to)
+            summary = [
+                ("КТГ", f"{data['ktg_percent']:.2f}%"),
+                ("Единиц техники", data["total_equipment"]),
+                ("Машино-дней в периоде", data["total_machine_days"]),
+                ("Машино-дней простоя", data["unavailable_machine_days"]),
+            ]
+            headers = ["Дата", "Доступно", "Недоступно", "КТГ, %"]
+            rows = [
+                [item["date"].strftime("%d.%m.%Y"), item["available"], item["unavailable"], f"{item['ktg_percent']:.2f}"]
+                for item in data["daily"]
+            ]
+''',
+    '''        if name == "КТГ":
+            data = service.get_ktg(date_from, date_to)
+            all_equipment_rows = list(
+                self.repository.get_all_equipment()
+            )
+            decommissioned = sum(
+                1 for row in all_equipment_rows
+                if str(self._report_value(row, "status", "") or "")
+                .strip().casefold() == "списан"
+            )
+            summary = [
+                ("КТГ", f"{data['ktg_percent']:.2f}%"),
+                ("Действующее оборудование", data["total_equipment"]),
+                (
+                    "В эксплуатации на конец периода",
+                    data["available_equipment"],
+                ),
+                (
+                    "В простое на конец периода",
+                    data["unavailable_equipment"],
+                ),
+                ("Списано", decommissioned),
+                ("Всего оборудования", len(all_equipment_rows)),
+                ("Машино-дней в периоде", data["total_machine_days"]),
+                ("Машино-дней простоя", data["unavailable_machine_days"]),
+            ]
+            headers = [
+                "Дата",
+                "В эксплуатации",
+                "В простое",
+                "КТГ, %",
+            ]
+            rows = [
+                [
+                    item["date"].strftime("%d.%m.%Y"),
+                    item["available"],
+                    item["unavailable"],
+                    f"{item['ktg_percent']:.2f}",
+                ]
+                for item in data["daily"]
+            ]
+''',
+    "KTG report equipment labels",
+)
+
 refresh_home_start = '''    def refresh_home(self):
 '''
 refresh_home_marker = '''        # Возвращаем на Главную текущие ремонты и простои отдельным блоком.
