@@ -12,6 +12,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={localappdata}\Programs\JournalTOiR
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
+DisableDirPage=no
 PrivilegesRequired=lowest
 OutputDir=output
 OutputBaseFilename=JournalTOiR_Setup_1.1.0
