@@ -54,14 +54,32 @@ new_stats = '''        # Пять однозначных показателей 
         self.total_equipment_card = StatCard(
             "Всего оборудования", icon_kind="equipment", accent="blue"
         )
+        self.customer_work_card = StatCard(
+            "Работы заказчика", icon_kind="customer_wrench", accent="violet"
+        )
+        self.components_card = StatCard(
+            "Компоненты на контроле", icon_kind="check_engine", accent="green"
+        )
+
+        primary_cards = (
+            self.active_equipment_card,
+            self.operating_equipment_card,
+            self.downtime_equipment_card,
+            self.decommissioned_equipment_card,
+            self.total_equipment_card,
+        )
+        for col, card in enumerate(primary_cards):
+            stats.addWidget(card, 0, col)
+            stats.setColumnStretch(col, 1)
+
+        # Сохраняем два прежних полезных KPI, но отделяем их от показателей
+        # состояния парка, чтобы они не смешивались с расчётом КТГ.
+        stats.addWidget(self.customer_work_card, 1, 0, 1, 2)
+        stats.addWidget(self.components_card, 1, 2, 1, 3)
+
+        # Старый цикл ниже нейтрализуется пустой последовательностью.
         for col, card in enumerate(
-            (
-                self.active_equipment_card,
-                self.operating_equipment_card,
-                self.downtime_equipment_card,
-                self.decommissioned_equipment_card,
-                self.total_equipment_card,
-            )
+            ()
         ):
 '''
 s = replace_once(s, old_stats, new_stats, "home equipment KPI cards")
@@ -81,12 +99,16 @@ s = replace_once(
         downtime_equipment,
         decommissioned_equipment,
         total_equipment,
+        customer_work=0,
+        components=0,
     ):
         self.active_equipment_card.set_value(active_equipment)
         self.operating_equipment_card.set_value(operating_equipment)
         self.downtime_equipment_card.set_value(downtime_equipment)
         self.decommissioned_equipment_card.set_value(decommissioned_equipment)
         self.total_equipment_card.set_value(total_equipment)
+        self.customer_work_card.set_value(customer_work)
+        self.components_card.set_value(components)
 ''',
     "home set_statistics",
 )
@@ -670,12 +692,23 @@ new_refresh_home_head = '''    def refresh_home(self):
             0, active_equipment - downtime_equipment
         )
 
+        try:
+            base_statistics = self.repository.get_dashboard_statistics()
+        except Exception:
+            base_statistics = {}
+        try:
+            customer_work = self.repository.get_customer_work_count()
+        except Exception:
+            customer_work = 0
+
         self.home_page.set_statistics(
             active_equipment,
             operating_equipment,
             downtime_equipment,
             decommissioned_equipment,
             total_equipment,
+            customer_work,
+            int(base_statistics.get("components", 0) or 0),
         )
 
 '''
