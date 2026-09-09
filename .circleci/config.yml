@@ -25,6 +25,7 @@ jobs:
             git apply build/sync_fix.patch
             py -3.13 build/apply_sync_ui_v2.py
             py -3.13 build/apply_estar_features_v4.py
+            py -3.13 build/apply_dashboard_report_fixes_v5.py
 
       - run:
           name: Install dependencies
