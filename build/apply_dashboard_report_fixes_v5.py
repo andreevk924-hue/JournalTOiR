@@ -120,6 +120,16 @@ s = replace_once(
     "settings wheel init",
 )
 
+s = replace_once(
+    s,
+    '''        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QScrollArea.NoFrame)
+''',
+    '''        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QScrollArea.NoFrame)
+        self.settings_scroll = scroll
+''',
+    "settings scroll reference",
+)
+
 helper = '''    @staticmethod
     def _settings_section(group):
         """Заголовок секции находится НАД рамкой, а не в её границе."""
