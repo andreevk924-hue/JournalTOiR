@@ -1,7 +1,7 @@
 Встроенные логотипы производителей используются только как справочные торговые знаки.
 
 Существующие: Komatsu, Caterpillar, Hitachi Construction Machinery, Liebherr, BELAZ.
-Добавлены в этом патче:
+
 - XCMG — Wikimedia Commons, File:XCMG logo.svg (author/source attribution on file page).
 - SANY — Wikimedia Commons, File:SANY Group logo.svg; source on Commons points to sanygroup.com.
 - LiuGong — Wikimedia Commons, File:LiuGong logo.svg; source on Commons points to LiuGong corporate brochure.
